@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 
 	noise "github.com/KEINOS/go-noise"
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -72,7 +73,7 @@ var gameSettings = struct {
 	CHUNK_SIZE  Vector2Int32
 	WATER_LEVEL float32
 }{
-	Vector2Int32{5, 5},
+	Vector2Int32{10, 10},
 	rl.NewColor(255, 255, 255, 255),
 	256,
 	rl.NewVector2(100, 100),
@@ -82,6 +83,29 @@ var gameSettings = struct {
 
 type Vector2Int32 struct {
 	X, Y int32
+}
+
+func (v *Vector2Int32) floorDiv(other int32) Vector2Int32 {
+	return Vector2Int32{
+		X: v.X / other,
+		Y: v.Y / other,
+	}
+}
+
+func (v *Vector2Int32) floorDivElem(other *Vector2Int32) Vector2Int32 {
+	return Vector2Int32{
+		X: v.X / other.X,
+		Y: v.Y / other.Y,
+	}
+}
+
+// constructor from rl.Vector2
+func NewVector2Int32FromRl(v *rl.Vector2) Vector2Int32 {
+	return Vector2Int32{int32(v.X), int32(v.Y)}
+}
+
+func NewVector2Int32(x, y int32) Vector2Int32 {
+	return Vector2Int32{x, y}
 }
 
 func (v *Vector2Int32) asRlVector2() rl.Vector2 {
@@ -127,7 +151,6 @@ func (c *ChunkMap) getChunk(chunkCoordinate Vector2Int32) *Chunk {
 }
 
 func (cm *ChunkMap) getTile(tileCoord Vector2Int32) Tile {
-
 	chunkCoord := getChunkCoords(tileCoord)
 	coordInChunk := Vector2Int32{
 		X: mod(tileCoord.X, gameSettings.CHUNK_SIZE.X),
@@ -202,17 +225,10 @@ func (c *Camera) getTileCoords() Vector2Int32 {
 	}
 }
 
-// -2, -1
 func getChunkCoords(tileCoord Vector2Int32) Vector2Int32 {
 	res := Vector2Int32{
-		X: tileCoord.X / int32(gameSettings.CHUNK_SIZE.X),
-		Y: tileCoord.Y / int32(gameSettings.CHUNK_SIZE.Y),
-	}
-	if tileCoord.X < 0 {
-		res.X -= 1
-	}
-	if tileCoord.Y < 0 {
-		res.Y -= 1
+		X: int32(math.Floor(float64(tileCoord.X) / float64(gameSettings.CHUNK_SIZE.X))),
+		Y: int32(math.Floor(float64(tileCoord.Y) / float64(gameSettings.CHUNK_SIZE.Y))),
 	}
 	return res
 }
@@ -237,34 +253,26 @@ func (g *Game) toWorldCoord(screenCoord rl.Vector2) rl.Vector2 {
 	)
 }
 
-func (g *Game) toTileCoord(worldCoord rl.Vector2) Vector2Int32 {
-	res := Vector2Int32{
-		X: int32(worldCoord.X) / gameSettings.TILE_SIZE.X,
-		Y: int32(worldCoord.Y) / gameSettings.TILE_SIZE.Y,
+func (g *Game) toTileCoord(worldCoord *rl.Vector2) Vector2Int32 {
+	return Vector2Int32{
+		X: int32(math.Floor(float64(worldCoord.X / float32(gameSettings.TILE_SIZE.X)))),
+		Y: int32(math.Floor(float64(worldCoord.Y / float32(gameSettings.TILE_SIZE.Y)))),
 	}
-	if worldCoord.X < 0 {
-		res.X -= 1
-	}
-	if worldCoord.Y < 0 {
-		res.Y -= 1
-	}
-	return res
 }
 
 func (g *Game) draw() {
 	tileSize := gameSettings.TILE_SIZE
 	for y := int32(0); y < int32(g.windowSize.Y/tileSize.Y); y++ {
 		for x := int32(0); x < int32(g.windowSize.X/tileSize.X); x++ {
-			worldCoord := g.toWorldCoord(rl.NewVector2(float32(x*tileSize.X), float32(y*tileSize.Y)))
-			tileCoord := g.toTileCoord(worldCoord)
-			tile := g.chunkMap.getTile(tileCoord)
-			tile.drawTile(g.toScreenCoord(worldCoord))
+			v_world := rl.NewVector2(
+				float32(x*tileSize.X)-g.windowSize.asRlVector2().X/2.0+g.camera.center.X,
+				float32(y*tileSize.Y)-g.windowSize.asRlVector2().Y/2.0+g.camera.center.Y,
+			)
+			v_tile := g.toTileCoord(&v_world)
 
-			// DEBUG
-			if tileCoord.X == 0 && tileCoord.Y == 0 {
-				t := Tile{terrain: UndefinedTerrain}
-				t.drawTile(g.toScreenCoord(worldCoord))
-			}
+			tile := g.chunkMap.getTile(v_tile)
+			tile.drawTile(g.toScreenCoord(v_world))
+
 		}
 	}
 
